@@ -187,6 +187,26 @@ test('si la tarea no usa botón "Enviar", guardar ya es definitivo y se avisa', 
   assert.equal(r.state, 'submitted');
 });
 
+test('CLI: si la tarea no tiene botón "Enviar", el mensaje final dice ENTREGADA y no "borrador"', async () => {
+  reset({ submissiondrafts: 0, requiresubmissionstatement: 0 });
+  await store.saveSession({ baseUrl: url, token: 'tok' });
+  await store.saveData({
+    generatedAt: NOW, baseUrl: url, user: { id: 1, name: 'Ana' }, courses: [{ id: 5, name: 'Linux' }], warnings: [],
+    tasks: [{ id: 'assign:42', kind: 'tarea', courseId: 5, course: 'Linux', name: 'Taller No. 1', dueAt: NOW + DAY * S * 2, state: 'pendiente' }],
+  });
+  const f = file('sin-boton.pdf');
+  const run = (...args) => new Promise((resolve) => execFile(process.execPath, ['src/cli.js', 'submit', ...args],
+    { env: { ...process.env, TRACKER_DATA_DIR: DATA }, cwd: path.resolve(import.meta.dirname, '..') },
+    (err, stdout, stderr) => resolve({ status: err ? (err.code ?? 1) : 0, stdout, stderr })));
+  const prev = await run('taller no. 1', '--file', f);
+  assert.match(prev.stdout, /ENTREGA DEFINITIVA/);
+  const code = /--confirm (\w{8})/.exec(prev.stdout)[1];
+  const ok = await run('--confirm', code);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /ENTREGADA/);
+  assert.doesNotMatch(ok.stdout, /borrador/);
+});
+
 test('CLI de punta a punta: vista previa, confirmación y registro', async () => {
   reset({ submissiondrafts: 1 });
   await store.saveSession({ baseUrl: url, token: 'tok' });

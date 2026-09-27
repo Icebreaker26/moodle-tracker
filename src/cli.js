@@ -139,7 +139,9 @@ async function submit() {
     await appendSubmissionLog({ at: new Date(result.at).toISOString(), assignId: plan.assignId, name: plan.name, courseId: plan.courseId,
       files: plan.files.map((f) => f.name), text: !!plan.text, sent: result.sent, state: result.state, code: plan.code });
     await clearPlan();
-    console.log(`${C.green}Hecho.${C.off} "${plan.name}" quedó en estado ${C.bold}${result.state}${C.off}${result.sent ? ' (enviada para calificación)' : ' (borrador: aún NO la ve el profesor)'}.`);
+    // El mensaje sigue el estado REAL en Moodle, no la bandera --final: sin botón "Enviar", guardar ya entrega.
+    const entregada = result.state === 'submitted';
+    console.log(`${C.green}Hecho.${C.off} "${plan.name}" quedó en estado ${C.bold}${result.state}${C.off}${entregada ? ' (ENTREGADA: el profesor ya la ve)' : ' (borrador: aún NO la ve el profesor)'}.`);
     if (result.files.length) console.log(`Archivos en Moodle: ${result.files.join(', ')}`);
     console.log(`${C.dim}Registrado en data/submissions.log. Ejecuta npm run sync para actualizar el panel.${C.off}`);
     return;
