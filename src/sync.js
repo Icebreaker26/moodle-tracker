@@ -125,7 +125,7 @@ export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), 
   try {
     const cal = await client.call('core_calendar_get_action_events_by_timesort', {
       timesortfrom: nowSec - 7 * DAY,
-      limitnum: 100,
+      limitnum: 50,
     });
     let added = 0;
     for (const ev of cal.events || []) {
