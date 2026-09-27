@@ -11,6 +11,7 @@ const files = {
   session: () => path.join(DATA_DIR, 'session.json'),
   data: () => path.join(DATA_DIR, 'data.json'),
   overrides: () => path.join(DATA_DIR, 'overrides.json'),
+  content: () => path.join(DATA_DIR, 'content.json'),
 };
 
 async function readJson(file, fallback) {
@@ -35,6 +36,9 @@ export const saveSession = (s) => writeJson(files.session(), { ...s, savedAt: Da
 
 export const loadData = () => readJson(files.data(), null);
 export const saveData = (d) => writeJson(files.data(), d);
+
+export const loadContent = () => readJson(files.content(), null);
+export const saveContent = (c) => writeJson(files.content(), c);
 
 export const loadOverrides = () => readJson(files.overrides(), {});
 export async function setOverride(id, done) {

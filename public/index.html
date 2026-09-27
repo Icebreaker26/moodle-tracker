@@ -107,7 +107,7 @@ function row(t,now){
     <input type="checkbox" data-id="${esc(t.id)}" ${t.doneManual?'checked':''} aria-label="Marcar como hecha: ${esc(t.name)}" title="Marcar como hecha (por si la entregaste fuera de Moodle)">
     <div class="title">${esc(t.name)}</div>
     <div class="due">${due}</div>
-    <div class="meta"><span>${esc(t.course)}</span><span class="chip">${esc(t.kind)}</span>${stateChip(t)}${t.url?`<a class="open" href="${esc(t.url)}" target="_blank" rel="noopener">Abrir en Moodle</a>`:''}</div>
+    <div class="meta"><span>${esc(t.course)}</span><span class="chip">${esc(t.kind)}</span>${stateChip(t)}${(t.missing&&t.missing.length)?`<span class="chip warn">Falta: ${esc(t.missing.join('; '))}</span>`:''}${t.url?`<a class="open" href="${esc(t.url)}" target="_blank" rel="noopener">Abrir en Moodle</a>`:''}</div>
   </div>`;
 }
 function render(){

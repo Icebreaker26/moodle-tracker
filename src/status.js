@@ -15,7 +15,7 @@ export function startOfLocalDay(ms) {
 export function bucketOf(task, nowMs, doneManual = false) {
   if (doneManual || task.state === 'entregada' || task.state === 'calificada') return 'entregada';
   if (task.state === 'sin_entrega_en_linea') return 'sin_entrega';
-  if (task.dueAt == null) return 'sin_fecha';
+  if (task.dueAt == null) return task.opensAt && task.opensAt > nowMs ? 'proxima' : 'sin_fecha';
   if (task.dueAt < nowMs) return 'vencida';
   const today = startOfLocalDay(nowMs);
   if (task.dueAt < today + DAY) return 'hoy';

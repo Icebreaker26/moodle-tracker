@@ -12,7 +12,9 @@
     "pending": "node src/cli.js pending",
     "exclude": "node src/cli.js exclude",
     "submit": "node src/cli.js submit",
+    "content": "node src/cli.js content",
+    "material": "node src/cli.js material",
     "start": "node src/cli.js serve",
-    "test": "node --test test/tracker.test.js test/submit.test.js"
+    "test": "node --test test/tracker.test.js test/submit.test.js test/content.test.js"
   }
 }

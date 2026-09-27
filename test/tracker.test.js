@@ -112,7 +112,7 @@ test('parseSubmission distingue los estados', () => {
 });
 
 test('syncAll combina tareas y calendario, sin cursos terminados ni duplicados', async () => {
-  const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW });
+  const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW, content: false });
   assert.equal(seen.classification, 'inprogress');
   assert.deepEqual(seen.courseids, [1, 2], 'no debe pedir el curso terminado');
   assert.equal(data.user.name, 'Ana Pérez');
@@ -134,7 +134,7 @@ test('syncAll combina tareas y calendario, sin cursos terminados ni duplicados',
 test('si Moodle no permite la clasificación "en progreso", filtra por fechas y avisa', async () => {
   mode.classificationFails = true;
   try {
-    const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW });
+    const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW, content: false });
     assert.deepEqual(data.courses.map((c) => c.id), [1, 2], 'el curso terminado sigue excluido por fecha');
     assert.equal(data.warnings.length, 1);
     assert.match(data.warnings[0], /en progreso/);
@@ -159,7 +159,7 @@ test('los eventos del calendario de cursos que no están en progreso se ignoran'
       throw new Error('función inesperada ' + fn);
     },
   };
-  const data = await syncAll(client, { nowSec: NOW });
+  const data = await syncAll(client, { nowSec: NOW, content: false });
   assert.deepEqual(data.tasks.map((t) => t.name), ['Quiz de Linux']);
 });
 
@@ -170,13 +170,13 @@ test('cursos excluidos: no se piden, no aparecen y el texto ignora tildes y may�
   assert.equal(isExcluded('Cálculo', ['']), false, 'un texto vacío no excluye nada');
   assert.equal(isExcluded('Linux', []), false);
 
-  const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW, exclude: ['linux'] });
+  const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW, exclude: ['linux'], content: false });
   assert.deepEqual(data.courses.map((c) => c.id), [1]);
   assert.deepEqual(seen.courseids, [1], 'no pide las tareas del curso excluido');
   assert.ok(data.tasks.every((t) => t.courseId === 1));
 
   // también se oculta al leer datos ya guardados
-  await store.saveData({ ...(await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW })) });
+  await store.saveData({ ...(await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW, content: false })) });
   await store.saveConfig({ excludeCourses: ['LINUX'] });
   const { buildPayload } = await import('../src/server.js');
   const p = await buildPayload();

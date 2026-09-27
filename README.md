@@ -31,6 +31,23 @@ npm run exclude -- "Nombre del curso"   # oculta un curso (por ejemplo, uno al q
 
 También puedes sincronizar desde el botón del panel.
 
+## Leer todo el contenido de los cursos
+
+`npm run sync` no solo trae las tareas: lee el contenido completo de cada curso en progreso (secciones, actividades, foros, cuestionarios, material) y lo guarda en `data/content.json`.
+
+- **Foros con fecha, cuestionarios y otras actividades** (encuestas, nubes de palabras, lecciones...) aparecen en la lista de pendientes junto a las tareas.
+- **Finalización real:** para las actividades con seguimiento, la app usa los detalles de finalización de Moodle y muestra exactamente qué falta (por ejemplo, "Publicar respuestas: 1; Hacer publicaciones en el foro: 2"). Un foro donde publicaste un hilo puede seguir incompleto si exige responder a otros.
+- Los cuestionarios se cuentan como hechos si tienen un intento terminado.
+
+```bash
+npm run content                      # esquema de cada curso: secciones, actividades, fechas y si las completaste
+npm run content -- Geopolítica       # solo un curso
+npm run content -- --forums          # mensajes recientes de los foros y avisos
+npm run content -- --material        # material que Moodle marca como no visto
+npm run material                     # descarga los archivos de los cursos a data/material/ (no repite lo ya bajado)
+npm run material -- Ética --max-mb 50
+```
+
 ## Entregar tareas (siempre con tu autorización)
 
 La entrega tiene **dos pasos** y no hay atajo para saltarse el primero:
@@ -70,6 +87,7 @@ Quien use esto en nombre de otra persona (por ejemplo, un asistente) debe enseñ
 | `src/sync.js` | Descarga cursos, tareas, estado de entrega y eventos del calendario |
 | `src/status.js` | Clasifica cada tarea por urgencia (hora de Bogotá) |
 | `src/store.js` | Guarda sesión, datos, marcas manuales y cursos excluidos en `data/` |
+| `src/content.js` | Lee el contenido de los cursos: foros, cuestionarios, actividades, material |
 | `src/submit.js` | Entrega en dos pasos: vista previa y confirmación con código |
 | `src/server.js` | Servidor local del panel y su API |
 | `public/index.html` | El panel |

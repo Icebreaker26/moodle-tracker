@@ -1,6 +1,7 @@
 // Descarga cursos, tareas y su estado de entrega desde Moodle y los normaliza.
 
 import { isExcluded } from './status.js';
+import { readContent } from './content.js';
 
 const DAY = 86400;
 
@@ -67,7 +68,7 @@ export function parseSubmission(res) {
  * @param opts.nowSec  segundos unix (para pruebas)
  * @param opts.includePast incluir cursos ya terminados
  */
-export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), includePast = false, exclude = [], log = () => {} } = {}) {
+export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), includePast = false, exclude = [], content = true, log = () => {} } = {}) {
   const warnings = [];
   const info = await client.call('core_webservice_get_site_info');
   const userid = info.userid;
@@ -121,7 +122,19 @@ export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), 
     });
   }
 
-  // 2) Eventos de acción del calendario (cuestionarios, foros, etc.), sin repetir tareas
+  // 2) Contenido completo de los cursos: foros con fecha, cuestionarios y actividades por completar
+  let contentCourses = [];
+  const covered = new Set();
+  if (content) {
+    const c = await readContent(client, courses, { userid, log });
+    contentCourses = c.courses;
+    warnings.push(...c.warnings);
+    tasks.push(...c.tasks);
+    for (const course of c.courses) for (const sec of course.sections) for (const m of sec.modules) { covered.add(`${m.modname}:${m.instance}`); covered.add(`${m.modname}:${m.cmid}`); }
+    log(`${c.tasks.length} actividades pendientes desde el contenido`);
+  }
+
+  // 3) Eventos de acción del calendario (cuestionarios, foros, etc.), sin repetir tareas
   try {
     const cal = await client.call('core_calendar_get_action_events_by_timesort', {
       timesortfrom: nowSec - 7 * DAY,
@@ -130,6 +143,7 @@ export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), 
     let added = 0;
     for (const ev of cal.events || []) {
       if (ev.modulename === 'assign') continue;
+      if (covered.has(`${ev.modulename}:${ev.instance}`)) continue; // ya leído desde el contenido
       if (ev.action && ev.action.actionable === false) continue;
       const courseId = ev.course?.id;
       if (!courseById.has(courseId)) continue; // solo cursos en progreso
@@ -160,5 +174,6 @@ export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), 
     courses,
     tasks,
     warnings,
+    content: contentCourses,
   };
 }

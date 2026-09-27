@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Moodle } from './moodle.js';
 import { syncAll } from './sync.js';
 import { annotate, summarize, isExcluded, BUCKET_ORDER, BUCKET_LABEL } from './status.js';
-import { loadSession, loadData, saveData, loadOverrides, setOverride, loadConfig, PUBLIC_DIR } from './store.js';
+import { loadSession, loadData, saveData, saveContent, loadOverrides, setOverride, loadConfig, PUBLIC_DIR } from './store.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
@@ -51,8 +51,9 @@ export async function runSync(log = () => {}) {
     const session = await loadSession();
     if (!session) throw Object.assign(new Error('Aún no has iniciado sesión. Ejecuta: npm run login'), { status: 401 });
     const cfg = await loadConfig();
-    const data = await syncAll(new Moodle(session), { log, exclude: cfg.excludeCourses });
+    const { content, ...data } = await syncAll(new Moodle(session), { log, exclude: cfg.excludeCourses });
     await saveData(data);
+    await saveContent({ generatedAt: data.generatedAt, userId: data.user.id, courses: content });
     return data;
   })().finally(() => {
     syncing = null;

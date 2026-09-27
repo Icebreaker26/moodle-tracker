@@ -2,7 +2,10 @@
 // Uso: node src/cli.js <login|sync|status|serve>
 import readline from 'node:readline';
 import { Moodle, MoodleError, normalizeBaseUrl, requestToken } from './moodle.js';
-import { saveSession, loadSession, loadConfig, saveConfig, loadData, loadPlan, savePlan, clearPlan, appendSubmissionLog } from './store.js';
+import path from 'node:path';
+import { saveSession, loadSession, loadConfig, saveConfig, loadData, loadContent, loadPlan, savePlan, clearPlan, appendSubmissionLog, DATA_DIR } from './store.js';
+import { unviewedMaterial, downloadMaterial } from './content.js';
+import { isExcluded } from './status.js';
 import { buildPlan, executePlan, SubmitError } from './submit.js';
 import { runSync, createServer, buildPayload } from './server.js';
 
@@ -61,7 +64,7 @@ async function status() {
   console.log(`\n${C.dim}${p.counts.entregada} entregadas. Datos de ${new Date(p.generatedAt).toLocaleString('es-CO')}${C.off}`);
 }
 
-const STATE_TEXT = { pendiente: 'sin entregar', borrador: 'borrador sin enviar', desconocido: 'estado desconocido' };
+const STATE_TEXT = { pendiente: 'sin completar', borrador: 'borrador sin enviar', desconocido: 'estado desconocido' };
 
 /** Lo que NO has entregado, por curso en progreso. Con --json devuelve datos para otros programas. */
 async function pending() {
@@ -82,6 +85,7 @@ async function pending() {
       const when = t.dueAt ? fmt.format(t.dueAt) : 'sin fecha';
       const tag = t.bucket === 'vencida' ? 'VENCIDA' : t.bucket === 'hoy' ? 'HOY' : '';
       console.log(`  ${color}${tag ? tag.padEnd(8) : '        '}${C.off}${when.padEnd(24)} ${t.name}  ${C.dim}[${STATE_TEXT[t.state] || t.state}]${C.off}`);
+      if (t.missing?.length) console.log(`  ${' '.repeat(32)}${C.yellow}falta:${C.off} ${t.missing.join('; ')}`);
     }
   }
   console.log(`\n${C.dim}Datos de ${new Date(p.generatedAt).toLocaleString('es-CO')}${C.off}`);
@@ -171,6 +175,75 @@ async function submit() {
   console.log(`Para descartarla:\n  npm run submit -- --cancel`);
 }
 
+/**
+ * Contenido de los cursos ya descargado con `sync`.
+ *   content [curso]             esquema: secciones y actividades con sus fechas y si las completaste
+ *   content [curso] --forums    mensajes recientes de los foros y avisos
+ *   content [curso] --material  material que Moodle marca como no visto
+ */
+async function content() {
+  const args = process.argv.slice(3);
+  const text = args.filter((a) => !a.startsWith('--')).join(' ').trim();
+  const c = await loadContent();
+  if (!c) return console.log('Todavía no hay contenido. Ejecuta: npm run sync');
+  const cfg = await loadConfig();
+  const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const courses = c.courses.filter((x) => !isExcluded(x.name, cfg.excludeCourses) && (!text || norm(x.name).includes(norm(text))));
+  const fmt = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+  for (const course of courses) {
+    console.log(`\n${C.bold}${course.name}${C.off}`);
+    if (args.includes('--forums')) {
+      for (const f of course.forums) {
+        console.log(`  ${C.bold}${f.name}${C.off} ${C.dim}(${f.type === 'news' ? 'avisos' : 'foro'}${f.dueAt ? ', vence ' + fmt.format(f.dueAt) : ''})${C.off}`);
+        if (!f.messages.length) console.log(`    ${C.dim}sin mensajes${C.off}`);
+        for (const m of f.messages) console.log(`    ${fmt.format(m.at)} · ${m.author}: ${m.subject}\n      ${m.text.replace(/\s+/g, ' ').slice(0, 220)}`);
+      }
+    } else if (args.includes('--material')) {
+      const mods = unviewedMaterial(course);
+      if (!mods.length) console.log(`  ${C.green}Todo el material marcado como visto${C.off}`);
+      for (const m of mods) console.log(`  ○ ${m.modname.padEnd(9)} ${m.name}  ${C.dim}(${m.section})${C.off}`);
+    } else {
+      for (const s of course.sections) {
+        if (!s.modules.length) continue;
+        console.log(`  ${C.dim}▸ ${s.name}${C.off}`);
+        for (const m of s.modules) {
+          if (m.modname === 'label') continue;
+          const mark = m.completed === true ? `${C.green}✓${C.off}` : m.completed === false ? `${C.yellow}○${C.off}` : ' ';
+          const dates = m.dates.map((d) => `${d.label} ${fmt.format(d.at)}`).join(' · ');
+          console.log(`    ${mark} ${m.modname.padEnd(9)} ${m.name}${dates ? `  ${C.dim}${dates}${C.off}` : ''}${m.files.length ? `  ${C.dim}[${m.files.length} archivo(s)]${C.off}` : ''}`);
+        }
+      }
+    }
+  }
+}
+
+/** Descarga los archivos del material a data/material/. Uso: material [curso] [--max-mb N] */
+async function material() {
+  const args = process.argv.slice(3);
+  const maxMb = Number(args[args.indexOf('--max-mb') + 1]) || 100;
+  const text = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--max-mb').join(' ').trim();
+  const session = await loadSession();
+  if (!session) throw new MoodleError('Primero inicia sesión: npm run login', 'no_session');
+  const c = await loadContent();
+  if (!c) throw new MoodleError('Primero sincroniza: npm run sync', 'no_data');
+  const cfg = await loadConfig();
+  const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const courses = c.courses.filter((x) => !isExcluded(x.name, cfg.excludeCourses) && (!text || norm(x.name).includes(norm(text))));
+  const client = new Moodle(session);
+  const dir = path.join(DATA_DIR, 'material');
+  let total = { downloaded: 0, skipped: 0, failed: 0 };
+  for (const course of courses) {
+    console.log(`\n${C.bold}${course.name}${C.off}`);
+    const r = await downloadMaterial(client, course, dir, { maxBytes: maxMb * 1048576, log: (m) => console.log(`  ${C.dim}${m}${C.off}`) });
+    for (const s of r.skipped.filter((x) => x.why !== 'ya descargado')) console.log(`  ${C.yellow}omitido:${C.off} ${s.file} (${s.why})`);
+    for (const f of r.failed) console.log(`  ${C.red}falló:${C.off} ${f.file} (${f.why})`);
+    console.log(`  ${r.downloaded.length} descargados · ${r.skipped.filter((x) => x.why === 'ya descargado').length} ya estaban · ${r.failed.length} fallidos`);
+    total = { downloaded: total.downloaded + r.downloaded.length, skipped: total.skipped + r.skipped.length, failed: total.failed + r.failed.length };
+  }
+  console.log(`\n${C.green}Listo.${C.off} Material en ${dir}`);
+}
+
 async function serve() {
   const port = Number(process.env.PORT) || 4173;
   createServer().listen(port, '127.0.0.1', () => {
@@ -178,10 +251,10 @@ async function serve() {
   });
 }
 
-const commands = { login, sync, status, pending, exclude, submit, serve };
+const commands = { login, sync, status, pending, exclude, submit, content, material, serve };
 const cmd = process.argv[2];
 if (!commands[cmd]) {
-  console.log('Uso: npm run <login | sync | status | pending | exclude | submit | start>');
+  console.log('Uso: npm run <login | sync | status | pending | content | material | exclude | submit | start>');
   process.exit(cmd ? 1 : 0);
 }
 try {
