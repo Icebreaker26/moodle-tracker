@@ -236,9 +236,10 @@ test('CLI de punta a punta: vista previa, confirmación y registro', async () =>
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /borrador/);
   const log = (await fsp.readFile(path.join(DATA, 'submissions.log'), 'utf8')).trim().split('\n').map((l) => JSON.parse(l));
-  assert.equal(log.length, 1);
-  assert.equal(log[0].name, 'Taller No. 1');
-  assert.equal(log[0].sent, false);
+  const mine = log.filter((l) => l.code === code); // el registro es común a otras pruebas: se busca la entrega por su código
+  assert.equal(mine.length, 1);
+  assert.equal(mine[0].name, 'Taller No. 1');
+  assert.equal(mine[0].sent, false);
   assert.equal(await store.loadPlan(), null, 'la vista previa se consume al confirmar');
 
   const again = await run('--confirm', code);
