@@ -11,7 +11,8 @@
     "status": "node src/cli.js status",
     "pending": "node src/cli.js pending",
     "exclude": "node src/cli.js exclude",
+    "submit": "node src/cli.js submit",
     "start": "node src/cli.js serve",
-    "test": "node --test test/tracker.test.js"
+    "test": "node --test test/tracker.test.js test/submit.test.js"
   }
 }

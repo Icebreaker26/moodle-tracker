@@ -1,5 +1,7 @@
 // Cliente mínimo de la API de web services de Moodle (solo lectura).
 // Usa fetch nativo: no requiere dependencias.
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 export class MoodleError extends Error {
   constructor(message, code) {
@@ -69,6 +71,35 @@ export class Moodle {
   constructor({ baseUrl, token }) {
     this.baseUrl = normalizeBaseUrl(baseUrl);
     this.token = token;
+  }
+
+  /**
+   * Sube un archivo al área de borradores del usuario (todavía no es una entrega).
+   * Devuelve { itemid, filename }. Para varios archivos, pasa el itemid del primero.
+   */
+  async upload(filePath, { itemid = 0 } = {}) {
+    const buf = await fs.readFile(filePath);
+    const form = new FormData();
+    form.append('token', this.token);
+    form.append('filearea', 'draft');
+    form.append('itemid', String(itemid));
+    form.append('file_1', new Blob([buf]), path.basename(filePath));
+    const res = await fetch(`${this.baseUrl}/webservice/upload.php`, {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(180000),
+    });
+    if (!res.ok) throw new MoodleError(`La subida respondió HTTP ${res.status}`, 'http_' + res.status);
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new MoodleError('La respuesta de la subida no es JSON', 'bad_response');
+    }
+    if (!Array.isArray(data) || !data[0]?.itemid) {
+      throw new MoodleError(data?.error || 'Moodle rechazó el archivo', data?.errorcode || 'upload_failed');
+    }
+    return data[0];
   }
 
   async call(wsfunction, params = {}) {

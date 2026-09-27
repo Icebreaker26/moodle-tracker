@@ -51,3 +51,13 @@ export async function saveConfig(cfg) {
   await writeJson(path.join(DATA_DIR, 'config.json'), cfg);
   return cfg;
 }
+
+// Entrega en preparación (vista previa) y registro de entregas realizadas.
+const planFile = () => path.join(DATA_DIR, 'pending-submission.json');
+export const loadPlan = () => readJson(planFile(), null);
+export const savePlan = (plan) => writeJson(planFile(), plan);
+export const clearPlan = () => fs.rm(planFile(), { force: true });
+export async function appendSubmissionLog(entry) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.appendFile(path.join(DATA_DIR, 'submissions.log'), JSON.stringify(entry) + '\n');
+}

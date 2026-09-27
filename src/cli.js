@@ -2,7 +2,8 @@
 // Uso: node src/cli.js <login|sync|status|serve>
 import readline from 'node:readline';
 import { Moodle, MoodleError, normalizeBaseUrl, requestToken } from './moodle.js';
-import { saveSession, loadSession, loadConfig, saveConfig } from './store.js';
+import { saveSession, loadSession, loadConfig, saveConfig, loadData, loadPlan, savePlan, clearPlan, appendSubmissionLog } from './store.js';
+import { buildPlan, executePlan, SubmitError } from './submit.js';
 import { runSync, createServer, buildPayload } from './server.js';
 
 const C = { dim: '\x1b[2m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', bold: '\x1b[1m', off: '\x1b[0m' };
@@ -104,6 +105,72 @@ async function exclude() {
   for (const c of cfg.excludeCourses) console.log('  - ' + c);
 }
 
+/**
+ * Entrega de tareas, siempre en dos pasos:
+ *   submit "<tarea>" --file a.pdf [--file b.docx] [--text "..."] [--final]   -> vista previa (no sube nada)
+ *   submit --confirm <código> [--acepto-declaracion]                           -> entrega de verdad
+ *   submit --cancel                                                            -> descarta la vista previa
+ */
+async function submit() {
+  const args = process.argv.slice(3);
+  const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+  const optAll = (name) => args.flatMap((a, i) => (a === name ? [args[i + 1]] : []));
+  const has = (name) => args.includes(name);
+  const fmtDate = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+  if (has('--cancel')) {
+    await clearPlan();
+    return console.log('Vista previa descartada. No se entregó nada.');
+  }
+
+  const session = await loadSession();
+  if (!session) throw new MoodleError('Primero inicia sesión: npm run login', 'no_session');
+  const client = new Moodle(session);
+
+  // ---- Paso 2: confirmación
+  if (has('--confirm')) {
+    const code = opt('--confirm');
+    const plan = await loadPlan();
+    const result = await executePlan(client, plan, { code, acceptStatement: has('--acepto-declaracion') });
+    await appendSubmissionLog({ at: new Date(result.at).toISOString(), assignId: plan.assignId, name: plan.name, courseId: plan.courseId,
+      files: plan.files.map((f) => f.name), text: !!plan.text, sent: result.sent, state: result.state, code: plan.code });
+    await clearPlan();
+    console.log(`${C.green}Hecho.${C.off} "${plan.name}" quedó en estado ${C.bold}${result.state}${C.off}${result.sent ? ' (enviada para calificación)' : ' (borrador: aún NO la ve el profesor)'}.`);
+    if (result.files.length) console.log(`Archivos en Moodle: ${result.files.join(', ')}`);
+    console.log(`${C.dim}Registrado en data/submissions.log. Ejecuta npm run sync para actualizar el panel.${C.off}`);
+    return;
+  }
+
+  // ---- Paso 1: vista previa
+  const target = args.find((a, i) => !a.startsWith('--') && !['--file', '--text'].includes(args[i - 1]));
+  if (!target) throw new MoodleError('Indica la tarea: npm run submit -- "nombre o id" --file archivo.pdf', 'missing');
+  const data = await loadData();
+  if (!data) throw new MoodleError('Primero sincroniza: npm run sync', 'no_data');
+  const wanted = target.replace(/^assign:/, '');
+  const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const matches = data.tasks.filter((t) => t.id.startsWith('assign:') && (t.id === 'assign:' + wanted || norm(t.name).includes(norm(wanted))));
+  if (matches.length !== 1) {
+    console.log(matches.length ? 'Hay varias coincidencias, sé más específico o usa el id:' : 'No encontré esa tarea. Las que puedes entregar:');
+    for (const t of (matches.length ? matches : data.tasks.filter((x) => x.id.startsWith('assign:') && x.state !== 'entregada'))) console.log(`  ${t.id.padEnd(12)} ${t.course} · ${t.name}`);
+    process.exit(1);
+  }
+  const t = matches[0];
+  const plan = await buildPlan(client, { courseId: t.courseId, assignId: Number(t.id.split(':')[1]), files: optAll('--file'), text: opt('--text') || '', final: has('--final') });
+  await savePlan(plan);
+
+  console.log(`\n${C.bold}VISTA PREVIA. Todavía no se subió nada.${C.off}`);
+  console.log(`Curso:    ${t.course}\nTarea:    ${plan.name}`);
+  console.log(`Vence:    ${plan.dueAt ? fmtDate.format(plan.dueAt) : 'sin fecha'}${plan.late ? `  ${C.red}(entrega tardía)${C.off}` : ''}`);
+  for (const f of plan.files) console.log(`Archivo:  ${f.name}  ${C.dim}(${(f.size / 1024).toFixed(0)} KB · sha ${f.sha256.slice(0, 8)})${C.off}`);
+  if (plan.text) console.log(`Texto:    ${plan.text.length} caracteres`);
+  console.log(`Acción:   ${plan.definitive ? `${C.red}ENTREGA DEFINITIVA${C.off}` : 'guardar como borrador (se puede editar)'}`);
+  for (const w of plan.warnings) console.log(`${C.yellow}! ${w}${C.off}`);
+  if (plan.definitive && plan.requiresStatement) console.log(`${C.yellow}! Moodle exige aceptar la declaración de autoría: esta tarea es tu propio trabajo.${C.off}`);
+  const extra = plan.definitive && plan.requiresStatement ? ' --acepto-declaracion' : '';
+  console.log(`\nPara ejecutarla (caduca a las ${new Date(plan.expiresAt).toLocaleTimeString('es-CO')}):\n  npm run submit -- --confirm ${plan.code}${extra}`);
+  console.log(`Para descartarla:\n  npm run submit -- --cancel`);
+}
+
 async function serve() {
   const port = Number(process.env.PORT) || 4173;
   createServer().listen(port, '127.0.0.1', () => {
@@ -111,10 +178,10 @@ async function serve() {
   });
 }
 
-const commands = { login, sync, status, pending, exclude, serve };
+const commands = { login, sync, status, pending, exclude, submit, serve };
 const cmd = process.argv[2];
 if (!commands[cmd]) {
-  console.log('Uso: npm run <login | sync | status | pending | exclude | start>');
+  console.log('Uso: npm run <login | sync | status | pending | exclude | submit | start>');
   process.exit(cmd ? 1 : 0);
 }
 try {
@@ -125,5 +192,6 @@ try {
     e.code === 'servicenotavailable' ? 'Moodle no ofrece el servicio móvil para tu cuenta.' :
     e.code === 'invalidtoken' ? 'El token ya no sirve. Vuelve a ejecutar: npm run login' : '';
   console.error(`${C.red}Error:${C.off} ${e.message}${hint ? ' ' + hint : ''}`);
+  for (const d of e.details || []) console.error(`  - ${d}`);
   process.exit(1);
 }
