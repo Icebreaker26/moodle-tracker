@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, promises as fsp } from 'node:fs';
 
 process.env.TRACKER_DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'moodle-tracker-'));
 
@@ -16,7 +16,8 @@ const store = await import('../src/store.js');
 
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 86400;
-const seen = { courseids: null };
+const seen = { courseids: null, classification: null };
+const mode = { classificationFails: false };
 
 function mockMoodle() {
   const submissions = {
@@ -38,6 +39,14 @@ function mockMoodle() {
       if (p.get('wstoken') !== 'tok123') return json({ exception: 'moodle_exception', errorcode: 'invalidtoken', message: 'Token inválido' });
       switch (p.get('wsfunction')) {
         case 'core_webservice_get_site_info': return json({ userid: 7, fullname: 'Ana Pérez' });
+        case 'core_course_get_enrolled_courses_by_timeline_classification':
+          if (mode.classificationFails) return json({ exception: 'moodle_exception', errorcode: 'accessexception', message: 'función no permitida' });
+          seen.classification = p.get('classification');
+          if (Number(p.get('offset')) > 0) return json({ courses: [], nextoffset: 0 });
+          return json({ courses: [
+            { id: 1, fullname: 'Cálculo', shortname: 'CAL' },
+            { id: 2, fullname: 'Linux', shortname: 'LIN' },
+          ], nextoffset: 2 });
         case 'core_enrol_get_users_courses':
           return json([
             { id: 1, fullname: 'Cálculo', shortname: 'CAL', enddate: 0 },
@@ -104,6 +113,7 @@ test('parseSubmission distingue los estados', () => {
 
 test('syncAll combina tareas y calendario, sin cursos terminados ni duplicados', async () => {
   const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW });
+  assert.equal(seen.classification, 'inprogress');
   assert.deepEqual(seen.courseids, [1, 2], 'no debe pedir el curso terminado');
   assert.equal(data.user.name, 'Ana Pérez');
   assert.equal(data.warnings.length, 0);
@@ -119,6 +129,61 @@ test('syncAll combina tareas y calendario, sin cursos terminados ni duplicados',
   assert.equal(by['cal:900'].kind, 'quiz');
   assert.ok(!by['cal:901'] && !by['cal:902'], 'sin duplicar tareas ni eventos no accionables');
   assert.equal(by['assign:11'].url, `${mock.url}/mod/assign/view.php?id=101`);
+});
+
+test('si Moodle no permite la clasificación "en progreso", filtra por fechas y avisa', async () => {
+  mode.classificationFails = true;
+  try {
+    const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW });
+    assert.deepEqual(data.courses.map((c) => c.id), [1, 2], 'el curso terminado sigue excluido por fecha');
+    assert.equal(data.warnings.length, 1);
+    assert.match(data.warnings[0], /en progreso/);
+  } finally {
+    mode.classificationFails = false;
+  }
+});
+
+test('los eventos del calendario de cursos que no están en progreso se ignoran', async () => {
+  const client = {
+    baseUrl: 'http://x',
+    call: async (fn) => {
+      if (fn === 'core_webservice_get_site_info') return { userid: 1, fullname: 'Ana' };
+      if (fn === 'core_course_get_enrolled_courses_by_timeline_classification') return { courses: [{ id: 2, fullname: 'Linux', shortname: 'LIN' }], nextoffset: 1 };
+      if (fn === 'mod_assign_get_assignments') return { courses: [] };
+      if (fn === 'core_calendar_get_action_events_by_timesort') {
+        return { events: [
+          { id: 1, name: 'Quiz de curso viejo', timesort: NOW + DAY, modulename: 'quiz', course: { id: 99, fullname: 'Viejo' }, action: { actionable: true } },
+          { id: 2, name: 'Quiz de Linux', timesort: NOW + DAY, modulename: 'quiz', course: { id: 2, fullname: 'Linux' }, action: { actionable: true } },
+        ] };
+      }
+      throw new Error('función inesperada ' + fn);
+    },
+  };
+  const data = await syncAll(client, { nowSec: NOW });
+  assert.deepEqual(data.tasks.map((t) => t.name), ['Quiz de Linux']);
+});
+
+test('cursos excluidos: no se piden, no aparecen y el texto ignora tildes y mayúsculas', async () => {
+  const { isExcluded } = await import('../src/status.js');
+  assert.equal(isExcluded('Optativa IV G2 2026-2', ['optativa iv g2']), true);
+  assert.equal(isExcluded('Cálculo', ['CALCULO']), true);
+  assert.equal(isExcluded('Cálculo', ['']), false, 'un texto vacío no excluye nada');
+  assert.equal(isExcluded('Linux', []), false);
+
+  const data = await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW, exclude: ['linux'] });
+  assert.deepEqual(data.courses.map((c) => c.id), [1]);
+  assert.deepEqual(seen.courseids, [1], 'no pide las tareas del curso excluido');
+  assert.ok(data.tasks.every((t) => t.courseId === 1));
+
+  // también se oculta al leer datos ya guardados
+  await store.saveData({ ...(await syncAll(new Moodle({ baseUrl: mock.url, token: 'tok123' }), { nowSec: NOW })) });
+  await store.saveConfig({ excludeCourses: ['LINUX'] });
+  const { buildPayload } = await import('../src/server.js');
+  const p = await buildPayload();
+  assert.deepEqual(p.courses.map((c) => c.name), ['Cálculo']);
+  assert.ok(p.tasks.every((t) => t.course === 'Cálculo'));
+  await store.saveConfig({ excludeCourses: [] });
+  await fsp.rm(path.join(process.env.TRACKER_DATA_DIR, 'data.json'), { force: true }); // deja el entorno limpio para otras pruebas
 });
 
 test('bucketOf clasifica según la fecha (hora de Bogotá)', () => {

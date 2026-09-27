@@ -9,6 +9,8 @@
     "login": "node src/cli.js login",
     "sync": "node src/cli.js sync",
     "status": "node src/cli.js status",
+    "pending": "node src/cli.js pending",
+    "exclude": "node src/cli.js exclude",
     "start": "node src/cli.js serve",
     "test": "node --test test/tracker.test.js"
   }

@@ -57,3 +57,11 @@ export function summarize(annotated) {
   for (const t of annotated) counts[t.bucket]++;
   return counts;
 }
+
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+/** ¿El nombre del curso coincide con alguno de los textos excluidos? (sin tildes ni mayúsculas) */
+export function isExcluded(courseName, patterns = []) {
+  const n = norm(courseName);
+  return patterns.some((p) => norm(p) && n.includes(norm(p)));
+}

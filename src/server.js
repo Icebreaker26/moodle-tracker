@@ -4,8 +4,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Moodle } from './moodle.js';
 import { syncAll } from './sync.js';
-import { annotate, summarize, BUCKET_ORDER, BUCKET_LABEL } from './status.js';
-import { loadSession, loadData, saveData, loadOverrides, setOverride, PUBLIC_DIR } from './store.js';
+import { annotate, summarize, isExcluded, BUCKET_ORDER, BUCKET_LABEL } from './status.js';
+import { loadSession, loadData, saveData, loadOverrides, setOverride, loadConfig, PUBLIC_DIR } from './store.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
@@ -24,15 +24,18 @@ async function readBody(req) {
 }
 
 export async function buildPayload(now = Date.now()) {
-  const [data, overrides] = await Promise.all([loadData(), loadOverrides()]);
+  const [data, overrides, cfg] = await Promise.all([loadData(), loadOverrides(), loadConfig()]);
   if (!data) return { empty: true, order: BUCKET_ORDER, labels: BUCKET_LABEL };
-  const tasks = annotate(data.tasks, overrides, now);
+  const hide = cfg.excludeCourses;
+  const courses = data.courses.filter((c) => !isExcluded(c.name, hide));
+  const tasks = annotate(data.tasks.filter((t) => !isExcluded(t.course, hide)), overrides, now);
   return {
     generatedAt: data.generatedAt,
     now,
     baseUrl: data.baseUrl,
     user: data.user,
-    courses: data.courses,
+    courses,
+    excluded: hide,
     warnings: data.warnings,
     tasks,
     counts: summarize(tasks),
@@ -47,7 +50,8 @@ export async function runSync(log = () => {}) {
   syncing = (async () => {
     const session = await loadSession();
     if (!session) throw Object.assign(new Error('Aún no has iniciado sesión. Ejecuta: npm run login'), { status: 401 });
-    const data = await syncAll(new Moodle(session), { log });
+    const cfg = await loadConfig();
+    const data = await syncAll(new Moodle(session), { log, exclude: cfg.excludeCourses });
     await saveData(data);
     return data;
   })().finally(() => {

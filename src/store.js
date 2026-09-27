@@ -44,3 +44,10 @@ export async function setOverride(id, done) {
   await writeJson(files.overrides(), o);
   return o;
 }
+
+// Configuración personal: cursos que no quieres ver (por ejemplo, uno al que te inscribieron por error).
+export const loadConfig = async () => ({ excludeCourses: [], ...(await readJson(path.join(DATA_DIR, 'config.json'), {})) });
+export async function saveConfig(cfg) {
+  await writeJson(path.join(DATA_DIR, 'config.json'), cfg);
+  return cfg;
+}

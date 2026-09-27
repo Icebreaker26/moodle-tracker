@@ -2,7 +2,7 @@
 // Uso: node src/cli.js <login|sync|status|serve>
 import readline from 'node:readline';
 import { Moodle, MoodleError, normalizeBaseUrl, requestToken } from './moodle.js';
-import { saveSession, loadSession } from './store.js';
+import { saveSession, loadSession, loadConfig, saveConfig } from './store.js';
 import { runSync, createServer, buildPayload } from './server.js';
 
 const C = { dim: '\x1b[2m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', bold: '\x1b[1m', off: '\x1b[0m' };
@@ -60,6 +60,50 @@ async function status() {
   console.log(`\n${C.dim}${p.counts.entregada} entregadas. Datos de ${new Date(p.generatedAt).toLocaleString('es-CO')}${C.off}`);
 }
 
+const STATE_TEXT = { pendiente: 'sin entregar', borrador: 'borrador sin enviar', desconocido: 'estado desconocido' };
+
+/** Lo que NO has entregado, por curso en progreso. Con --json devuelve datos para otros programas. */
+async function pending() {
+  const p = await buildPayload();
+  if (p.empty) return console.log('Todavía no hay datos. Ejecuta: npm run sync');
+  const todo = p.tasks.filter((t) => ['vencida', 'hoy', 'semana', 'proxima', 'sin_fecha'].includes(t.bucket));
+  if (process.argv.includes('--json')) {
+    return console.log(JSON.stringify({ generatedAt: p.generatedAt, courses: p.courses.map((c) => c.name), pending: todo }, null, 2));
+  }
+  const fmt = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  console.log(`${C.bold}Entregas sin realizar en tus cursos en progreso: ${todo.length}${C.off}`);
+  for (const course of p.courses) {
+    const items = todo.filter((t) => t.courseId === course.id);
+    console.log(`\n${C.bold}${course.name}${C.off} ${C.dim}(${items.length} pendientes)${C.off}`);
+    if (!items.length) console.log(`  ${C.green}Al día${C.off}`);
+    for (const t of items) {
+      const color = t.bucket === 'vencida' ? C.red : t.bucket === 'hoy' ? C.yellow : '';
+      const when = t.dueAt ? fmt.format(t.dueAt) : 'sin fecha';
+      const tag = t.bucket === 'vencida' ? 'VENCIDA' : t.bucket === 'hoy' ? 'HOY' : '';
+      console.log(`  ${color}${tag ? tag.padEnd(8) : '        '}${C.off}${when.padEnd(24)} ${t.name}  ${C.dim}[${STATE_TEXT[t.state] || t.state}]${C.off}`);
+    }
+  }
+  console.log(`\n${C.dim}Datos de ${new Date(p.generatedAt).toLocaleString('es-CO')}${C.off}`);
+}
+
+/** Cursos que no quieres ver. Uso: exclude | exclude "texto" | exclude --remove "texto" */
+async function exclude() {
+  const args = process.argv.slice(3);
+  const remove = args.includes('--remove');
+  const text = args.filter((a) => a !== '--remove').join(' ').trim();
+  const cfg = await loadConfig();
+  if (text) {
+    const list = new Set(cfg.excludeCourses);
+    if (remove) list.delete(text);
+    else list.add(text);
+    cfg.excludeCourses = [...list];
+    await saveConfig(cfg);
+  }
+  if (!cfg.excludeCourses.length) return console.log('No hay cursos excluidos.');
+  console.log('Cursos excluidos (por texto contenido en el nombre):');
+  for (const c of cfg.excludeCourses) console.log('  - ' + c);
+}
+
 async function serve() {
   const port = Number(process.env.PORT) || 4173;
   createServer().listen(port, '127.0.0.1', () => {
@@ -67,10 +111,10 @@ async function serve() {
   });
 }
 
-const commands = { login, sync, status, serve };
+const commands = { login, sync, status, pending, exclude, serve };
 const cmd = process.argv[2];
 if (!commands[cmd]) {
-  console.log('Uso: npm run <login | sync | status | start>');
+  console.log('Uso: npm run <login | sync | status | pending | exclude | start>');
   process.exit(cmd ? 1 : 0);
 }
 try {

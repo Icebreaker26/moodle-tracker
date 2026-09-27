@@ -1,5 +1,7 @@
 // Descarga cursos, tareas y su estado de entrega desde Moodle y los normaliza.
 
+import { isExcluded } from './status.js';
+
 const DAY = 86400;
 
 async function pool(items, limit, worker) {
@@ -13,6 +15,37 @@ async function pool(items, limit, worker) {
   });
   await Promise.all(runners);
   return results;
+}
+
+/**
+ * Cursos "en progreso": la misma clasificación que usa el panel de Moodle.
+ * Si esa función no está permitida, se usa un respaldo por fechas de los cursos.
+ */
+async function listCourses(client, { userid, nowSec, includePast, warnings }) {
+  try {
+    const out = [];
+    let offset = 0;
+    for (let i = 0; i < 20; i++) {
+      const r = await client.call('core_course_get_enrolled_courses_by_timeline_classification', {
+        classification: includePast ? 'all' : 'inprogress',
+        limit: 0,
+        offset,
+        sort: 'fullname',
+      });
+      const page = r.courses || [];
+      out.push(...page);
+      if (!page.length || !(r.nextoffset > offset)) break;
+      offset = r.nextoffset;
+    }
+    const unique = new Map(out.map((c) => [c.id, { id: c.id, name: c.fullname, short: c.shortname }]));
+    return [...unique.values()];
+  } catch (e) {
+    warnings.push(`No se pudo usar la clasificación "en progreso" de Moodle (${e.message}); se filtraron los cursos por sus fechas.`);
+    const raw = await client.call('core_enrol_get_users_courses', { userid });
+    return raw
+      .filter((c) => includePast || !(c.enddate > 0 && c.enddate < nowSec - 30 * DAY))
+      .map((c) => ({ id: c.id, name: c.fullname, short: c.shortname }));
+  }
 }
 
 /** Interpreta la respuesta de mod_assign_get_submission_status. */
@@ -34,18 +67,15 @@ export function parseSubmission(res) {
  * @param opts.nowSec  segundos unix (para pruebas)
  * @param opts.includePast incluir cursos ya terminados
  */
-export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), includePast = false, log = () => {} } = {}) {
+export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), includePast = false, exclude = [], log = () => {} } = {}) {
   const warnings = [];
   const info = await client.call('core_webservice_get_site_info');
   const userid = info.userid;
   log(`Sesión de ${info.fullname}`);
 
-  const rawCourses = await client.call('core_enrol_get_users_courses', { userid });
-  const courses = rawCourses
-    .filter((c) => includePast || !(c.enddate > 0 && c.enddate < nowSec - 30 * DAY))
-    .map((c) => ({ id: c.id, name: c.fullname, short: c.shortname }));
+  const courses = (await listCourses(client, { userid, nowSec, includePast, warnings })).filter((c) => !isExcluded(c.name, exclude));
   const courseById = new Map(courses.map((c) => [c.id, c]));
-  log(`${courses.length} cursos activos`);
+  log(`${courses.length} cursos en progreso`);
 
   const tasks = [];
 
@@ -59,6 +89,7 @@ export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), 
     }
     const assigns = [];
     for (const c of assignData.courses || []) {
+      if (!courseById.has(c.id)) continue; // por si Moodle devuelve más cursos de los pedidos
       for (const a of c.assignments || []) assigns.push({ ...a, courseId: c.id });
     }
     log(`${assigns.length} tareas encontradas`);
@@ -101,6 +132,7 @@ export async function syncAll(client, { nowSec = Math.floor(Date.now() / 1000), 
       if (ev.modulename === 'assign') continue;
       if (ev.action && ev.action.actionable === false) continue;
       const courseId = ev.course?.id;
+      if (!courseById.has(courseId)) continue; // solo cursos en progreso
       tasks.push({
         id: `cal:${ev.id}`,
         kind: ev.modulename || 'evento',

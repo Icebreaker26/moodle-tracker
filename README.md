@@ -11,6 +11,7 @@ Usa la **API oficial de web services de Moodle** (la misma que usa la app móvil
 - Cuestionarios y otras actividades con fecha, tomadas del calendario de Moodle.
 - Filtro por curso y buscador. Puedes marcar una tarea como hecha a mano (por ejemplo, si la entregaste por otro medio).
 - Fechas en hora de Colombia.
+- Solo cursos **en progreso**: usa la misma clasificación que el panel de Moodle. Los cursos terminados y los que excluyas no aparecen.
 
 ## Requisitos
 
@@ -24,6 +25,8 @@ npm run login     # una sola vez: pide dirección, usuario y contraseña en tu t
 npm run sync      # descarga tus cursos y tareas
 npm start         # abre el panel en http://127.0.0.1:4173
 npm run status    # resumen rápido en la terminal, sin abrir el panel
+npm run pending   # solo lo que NO has entregado, por curso (usa --json para otros programas)
+npm run exclude -- "Nombre del curso"   # oculta un curso (por ejemplo, uno al que te inscribieron por error)
 ```
 
 También puedes sincronizar desde el botón del panel.
@@ -43,11 +46,11 @@ También puedes sincronizar desde el botón del panel.
 | `src/moodle.js` | Cliente de la API: pide el token y llama a las funciones de web services |
 | `src/sync.js` | Descarga cursos, tareas, estado de entrega y eventos del calendario |
 | `src/status.js` | Clasifica cada tarea por urgencia (hora de Bogotá) |
-| `src/store.js` | Guarda sesión, datos y marcas manuales en `data/` |
+| `src/store.js` | Guarda sesión, datos, marcas manuales y cursos excluidos en `data/` |
 | `src/server.js` | Servidor local del panel y su API |
 | `public/index.html` | El panel |
 
-Funciones de Moodle que usa: `core_webservice_get_site_info`, `core_enrol_get_users_courses`, `mod_assign_get_assignments`, `mod_assign_get_submission_status` y `core_calendar_get_action_events_by_timesort`.
+Funciones de Moodle que usa: `core_webservice_get_site_info`, `core_course_get_enrolled_courses_by_timeline_classification` (cursos en progreso; con `core_enrol_get_users_courses` como respaldo), `mod_assign_get_assignments`, `mod_assign_get_submission_status` y `core_calendar_get_action_events_by_timesort`.
 
 ## Pruebas
 
