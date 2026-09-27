@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mis entregas</title>
+<style>
+:root{
+  --bg:#F4F5F2; --surface:#FFFFFF; --ink:#1B2521; --muted:#5C6B65; --line:#DADFDA; --soft:#ECEFEB;
+  --accent:#1F6F5C; --accent-ink:#FFFFFF;
+  --late:#B3261E; --late-bg:#FBEAE8; --today:#8A5A00; --today-bg:#FBF0D9; --week:#2B5DA8; --week-bg:#E6EEFA; --ok:#237A4B; --ok-bg:#E3F3EA;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{color-scheme:dark;
+    --bg:#101614; --surface:#18211E; --ink:#E7EFEB; --muted:#9BAEA6; --line:#2A3833; --soft:#1F2C28;
+    --accent:#5CC4A8; --accent-ink:#08201A;
+    --late:#FF8A80; --late-bg:#3A1F1D; --today:#F2C56B; --today-bg:#33290F; --week:#8DB4F2; --week-bg:#1B2A42; --ok:#6FCF9F; --ok-bg:#15301F;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);padding-inline:16px}
+.wrap{max-width:920px;margin:0 auto;padding-block:28px 64px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 20px;margin-bottom:20px}
+h1{font-size:1.7rem;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:.85rem;margin-top:2px}
+button{font:500 .85rem var(--sans);padding:8px 14px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.6;cursor:progress}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.stat{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;font:inherit}
+.stat b{display:block;font:600 1.9rem/1.1 var(--mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:.8rem;color:var(--muted)}
+.stat.late b{color:var(--late)}.stat.today b{color:var(--today)}.stat.week b{color:var(--week)}
+.filters{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:8px}
+select,input[type=search]{font:.85rem var(--sans);padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+input[type=search]{flex:1;min-width:180px}
+label.chk{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.banner{border:1px solid var(--line);background:var(--surface);border-left:4px solid var(--today);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:.88rem}
+.banner.err{border-left-color:var(--late)}
+h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:28px 0 8px;display:flex;align-items:center;gap:8px}
+h2 .n{font-family:var(--mono);background:var(--soft);border-radius:99px;padding:0 8px;letter-spacing:0}
+h2.vencida{color:var(--late)}h2.hoy{color:var(--today)}h2.semana{color:var(--week)}
+.list{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:10px 12px;border-left-width:4px}
+.row.vencida{border-left-color:var(--late)}.row.hoy{border-left-color:var(--today)}.row.semana{border-left-color:var(--week)}.row.entregada{border-left-color:var(--ok);opacity:.78}
+.row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.title{font-weight:600;overflow-wrap:anywhere}
+.meta{grid-column:2;font-size:.8rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 10px}
+.due{text-align:right;font-size:.82rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.due b{display:block;font-weight:600}
+.late-t{color:var(--late)}.today-t{color:var(--today)}.week-t{color:var(--week)}
+.chip{font:600 .68rem var(--mono);padding:1px 7px;border-radius:99px;background:var(--soft);color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.chip.late{background:var(--late-bg);color:var(--late)}.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.warn{background:var(--today-bg);color:var(--today)}
+a.open{color:var(--accent);font-size:.8rem;text-decoration:none}
+a.open:hover{text-decoration:underline}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:28px;text-align:center;color:var(--muted)}
+.empty code{font-family:var(--mono);background:var(--soft);padding:1px 6px;border-radius:4px;color:var(--ink)}
+@media (max-width:560px){
+  .row{grid-template-columns:auto 1fr}
+  .due{grid-column:2;text-align:left}
+  .wrap{padding-block:20px 48px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Mis entregas</h1>
+      <div class="sub" id="sub">Cargando…</div>
+    </div>
+    <button class="primary" id="sync">Sincronizar con Moodle</button>
+  </header>
+  <div id="banner"></div>
+  <div id="app"></div>
+</div>
+
+<script>
+const TZ='America/Bogota';
+const dfDay=new Intl.DateTimeFormat('es-CO',{timeZone:TZ,weekday:'short',day:'numeric',month:'short'});
+const dfHour=new Intl.DateTimeFormat('es-CO',{timeZone:TZ,hour:'numeric',minute:'2-digit'});
+const app=document.getElementById('app'), sub=document.getElementById('sub'), banner=document.getElementById('banner'), syncBtn=document.getElementById('sync');
+let state=null, filters={course:'',q:'',showDone:false};
+try{const f=JSON.parse(localStorage.getItem('filters')||'null'); if(f) filters={...filters,...f}}catch(e){}
+const save=()=>{try{localStorage.setItem('filters',JSON.stringify(filters))}catch(e){}};
+const H={'X-Requested-With':'moodle-tracker','Content-Type':'application/json'};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function rel(ms,now){
+  const d=ms-now, a=Math.abs(d), h=a/3600000, dd=a/86400000;
+  let t=h<1?Math.max(1,Math.round(a/60000))+' min':h<24?Math.round(h)+' h':(dd<10?Math.round(dd):Math.round(dd))+(Math.round(dd)===1?' día':' días');
+  return d<0?'hace '+t:'en '+t;
+}
+function stateChip(t){
+  const m={entregada:['Entregada','ok'],calificada:['Calificada'+(t.grade?' · '+t.grade:''),'ok'],borrador:['Borrador sin enviar','warn'],pendiente:['Sin entregar',''],sin_entrega_en_linea:['Sin entrega en línea',''],desconocido:['Estado desconocido','warn']};
+  const [txt,cls]=m[t.state]||[t.state,''];
+  if(t.doneManual) return '<span class="chip ok">Marcada por ti</span>';
+  return `<span class="chip ${cls}">${esc(txt)}</span>`;
+}
+function row(t,now){
+  const cls=t.bucket, tcls=cls==='vencida'?'late-t':cls==='hoy'?'today-t':cls==='semana'?'week-t':'';
+  const due=t.dueAt?`<b class="${tcls}">${esc(rel(t.dueAt,now))}</b>${esc(dfDay.format(t.dueAt))} · ${esc(dfHour.format(t.dueAt))}`:'<b>Sin fecha</b>';
+  return `<div class="row ${cls}">
+    <input type="checkbox" data-id="${esc(t.id)}" ${t.doneManual?'checked':''} aria-label="Marcar como hecha: ${esc(t.name)}" title="Marcar como hecha (por si la entregaste fuera de Moodle)">
+    <div class="title">${esc(t.name)}</div>
+    <div class="due">${due}</div>
+    <div class="meta"><span>${esc(t.course)}</span><span class="chip">${esc(t.kind)}</span>${stateChip(t)}${t.url?`<a class="open" href="${esc(t.url)}" target="_blank" rel="noopener">Abrir en Moodle</a>`:''}</div>
+  </div>`;
+}
+function render(){
+  const p=state;
+  if(!p||p.empty){
+    sub.textContent='Sin datos todavía';
+    app.innerHTML='<div class="empty"><p><b>Aún no has sincronizado.</b></p><p>Primero inicia sesión en tu terminal con <code>npm run login</code> y luego pulsa <b>Sincronizar con Moodle</b>.</p></div>';
+    return;
+  }
+  sub.textContent=`${p.user.name} · actualizado ${dfDay.format(p.generatedAt)}, ${dfHour.format(p.generatedAt)}`;
+  const tasks=p.tasks.filter(t=>(!filters.course||String(t.courseId)===filters.course)&&(!filters.q||(t.name+' '+t.course).toLowerCase().includes(filters.q.toLowerCase())));
+  const cnt=b=>tasks.filter(t=>t.bucket===b).length;
+  let h=`<div class="stats">
+    <button class="stat late" data-go="vencida"><b>${cnt('vencida')}</b><span>vencidas sin entregar</span></button>
+    <button class="stat today" data-go="hoy"><b>${cnt('hoy')}</b><span>vencen hoy</span></button>
+    <button class="stat week" data-go="semana"><b>${cnt('semana')}</b><span>esta semana</span></button>
+    <button class="stat" data-go="proxima"><b>${cnt('proxima')}</b><span>más adelante</span></button>
+  </div>
+  <div class="filters">
+    <select id="course" aria-label="Filtrar por curso"><option value="">Todos los cursos</option>${p.courses.map(c=>`<option value="${c.id}" ${String(c.id)===filters.course?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+    <input id="q" type="search" placeholder="Buscar tarea o curso" value="${esc(filters.q)}" aria-label="Buscar">
+    <label class="chk"><input id="done" type="checkbox" ${filters.showDone?'checked':''}> Mostrar entregadas</label>
+  </div>`;
+  for(const b of p.order){
+    if(b==='entregada'&&!filters.showDone) continue;
+    const items=tasks.filter(t=>t.bucket===b);
+    if(!items.length) continue;
+    h+=`<h2 class="${b}" id="b-${b}">${esc(p.labels[b])} <span class="n">${items.length}</span></h2><div class="list">${items.map(t=>row(t,p.now)).join('')}</div>`;
+  }
+  if(!tasks.some(t=>t.bucket!=='entregada')) h+='<div class="empty" style="margin-top:20px">No tienes nada pendiente con estos filtros.</div>';
+  app.innerHTML=h;
+  banner.innerHTML=(p.warnings||[]).length?`<div class="banner"><b>Avisos de la última sincronización</b><br>${p.warnings.slice(0,5).map(esc).join('<br>')}</div>`:'';
+}
+async function load(){
+  try{const r=await fetch('/api/data'); state=await r.json()}catch(e){banner.innerHTML='<div class="banner err">No se pudo leer el servidor local.</div>'}
+  render();
+}
+app.addEventListener('input',e=>{
+  if(e.target.id==='q'){filters.q=e.target.value;save();const pos=e.target.selectionStart;render();const q=document.getElementById('q');q.focus();q.setSelectionRange(pos,pos)}
+});
+app.addEventListener('change',async e=>{
+  const t=e.target;
+  if(t.id==='course'){filters.course=t.value;save();render()}
+  else if(t.id==='done'){filters.showDone=t.checked;save();render()}
+  else if(t.dataset.id){
+    const r=await fetch('/api/override',{method:'POST',headers:H,body:JSON.stringify({id:t.dataset.id,done:t.checked})});
+    state=await r.json(); render();
+  }
+});
+app.addEventListener('click',e=>{
+  const s=e.target.closest('[data-go]'); if(!s) return;
+  const el=document.getElementById('b-'+s.dataset.go); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+});
+syncBtn.addEventListener('click',async()=>{
+  syncBtn.disabled=true; syncBtn.textContent='Sincronizando…'; banner.innerHTML='';
+  try{
+    const r=await fetch('/api/sync',{method:'POST',headers:H}); const j=await r.json();
+    if(!r.ok) throw new Error(j.error||'Error al sincronizar');
+    state=j; render();
+  }catch(e){banner.innerHTML=`<div class="banner err"><b>No se pudo sincronizar.</b> ${esc(e.message)}</div>`}
+  finally{syncBtn.disabled=false; syncBtn.textContent='Sincronizar con Moodle'}
+});
+load();
+</script>
+</body>
+</html>

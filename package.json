@@ -1,0 +1,15 @@
+{
+  "name": "moodle-tracker",
+  "version": "0.1.0",
+  "description": "Panel local para no perder el rastro de tareas y entregas del aula virtual de Moodle",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "login": "node src/cli.js login",
+    "sync": "node src/cli.js sync",
+    "status": "node src/cli.js status",
+    "start": "node src/cli.js serve",
+    "test": "node --test test/tracker.test.js"
+  }
+}
