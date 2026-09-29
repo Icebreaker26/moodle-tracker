@@ -239,7 +239,11 @@ test('API local: datos, protección de cabecera, marcar hecha y sincronizar', as
     const after2 = await (await fetch(`${base}/api/override`, { method: 'POST', headers: H, body: JSON.stringify({ id: 'assign:11', done: false }) })).json();
     assert.equal(after2.counts.entregada, before);
 
-    assert.match(await (await fetch(`${base}/`)).text(), /Mis entregas/);
+    // Smoke test del panel: no atado al texto visible (puede cambiar con el diseño),
+    // sino a que sirva el HTML real con su punto de montaje y el botón de sincronizar.
+    const html = await (await fetch(`${base}/`)).text();
+    assert.match(html, /id="app"/);
+    assert.match(html, /id="sync"/);
     assert.equal((await fetch(`${base}/../package.json`)).status === 200, false);
   } finally {
     srv.close();
