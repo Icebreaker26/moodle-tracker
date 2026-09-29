@@ -110,3 +110,15 @@ Las pruebas usan un Moodle simulado. No se conectan a tu Moodle real.
 | `Moodle no ofrece el servicio móvil` | La universidad no lo habilitó; habría que usar el calendario exportable (iCal) |
 | `El token ya no sirve` | Ejecuta `npm run login` otra vez |
 | Avisos en el panel sobre una función | Tu Moodle no permite esa función; el resto sigue funcionando |
+
+## Usarlo con tu propio Moodle
+
+No hay nada de la UCP escrito en el código: la dirección que ves en `npm run login` es solo un valor por defecto para no tenerla que escribir cada vez. Cualquiera con cuenta en un Moodle que tenga habilitado el servicio móvil puede usar este mismo programa apuntando a su propia institución — cada quien guarda su propio token en su copia local de `data/`, nadie comparte nada con nadie.
+
+## Contribuir
+
+Si quieres agregar algo (otro tipo de actividad, otro idioma, otra vista), revisa [AGENTS.md](AGENTS.md) antes de tocar cualquier cosa que hable con Moodle: ahí están las reglas de qué puede leer/escribir el programa (y por extensión, cualquier asistente que te ayude a programarlo) sin pedir permiso, y qué necesita tu autorización explícita cada vez.
+
+## Licencia
+
+[MIT](LICENSE) — úsalo, cópialo, cámbiale hasta el nombre.

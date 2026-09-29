@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Panel local para no perder el rastro de tareas y entregas del aula virtual de Moodle",
   "type": "module",
+  "license": "MIT",
   "private": true,
   "engines": { "node": ">=20" },
   "scripts": {
