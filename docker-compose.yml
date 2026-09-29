@@ -9,3 +9,5 @@ services:
       - ./data:/app/data
     stdin_open: true # necesario para `docker compose run` en comandos interactivos (login)
     tty: true
+    restart: unless-stopped # útil si esto vive en un servidor/NAS siempre encendido;
+                             # no hace nada distinto si solo lo usas en tu laptop
