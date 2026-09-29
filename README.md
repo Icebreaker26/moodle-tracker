@@ -1,8 +1,38 @@
 # moodle-tracker
 
+![licencia](https://img.shields.io/badge/licencia-MIT-b967ff) ![node](https://img.shields.io/badge/node-%3E%3D20-00ffa2) ![dependencias](https://img.shields.io/badge/dependencias-0-ff2e88) ![build](https://img.shields.io/badge/build%20step-ninguno-eef0f6)
+
+```
+     .-""""""-.
+    /  ()  ()  \
+   |      ▽     |
+    \  '----'  /
+     '-......-'
+
+root@aula:~$ whoami
+moodle-tracker — no pierdas el rastro de tus entregas
+```
+
 Panel local para no perder el rastro de las tareas del aula virtual (Moodle): qué está vencido, qué vence hoy o esta semana, y qué ya entregaste.
 
-Usa la **API oficial de web services de Moodle** (la misma que usa la app móvil), no scraping de páginas. Todo corre en tu computador: no hay servidores intermedios ni cuentas nuevas.
+Usa la **API oficial de web services de Moodle** (la misma que usa la app móvil), no scraping de páginas. Todo corre en tu computador: no hay servidores intermedios, no hay cuentas nuevas, no hay `npm install`.
+
+> **Principio de diseño: sencillez por encima de todo.** Cero dependencias, cero paso de build, cero framework. Vanilla JS/CSS/HTML en el panel, vanilla Node en el backend. Si una función nueva solo se justifica agregando una dependencia, probablemente no pertenece aquí — ver [Contribuir](#contribuir).
+
+## Índice
+
+- [Qué muestra](#qué-muestra)
+- [Requisitos](#requisitos)
+- [Inicio rápido](#inicio-rápido)
+- [Uso completo](#uso-completo)
+- [Si sos un agente / le vas a pedir a uno que opere esto](#si-sos-un-agente--le-vas-a-pedir-a-uno-que-opere-esto)
+- [Privacidad y seguridad](#privacidad-y-seguridad)
+- [Estructura del repo](#estructura-del-repo)
+- [Usarlo con tu propio Moodle](#usarlo-con-tu-propio-moodle)
+- [Pruebas](#pruebas)
+- [Si algo falla](#si-algo-falla)
+- [Contribuir](#contribuir)
+- [Licencia](#licencia)
 
 ## Qué muestra
 
@@ -15,23 +45,33 @@ Usa la **API oficial de web services de Moodle** (la misma que usa la app móvil
 
 ## Requisitos
 
-- Node.js 20 o superior. No hay que instalar dependencias.
+- Node.js 20 o superior. No hay que instalar dependencias (`npm install` no hace nada porque no hay ninguna).
 - Que tu Moodle tenga habilitado el servicio móvil (si usas la app de Moodle con tu cuenta, lo tiene).
 
-## Uso
+## Inicio rápido
+
+Cuatro comandos, sin configuración manual:
 
 ```bash
 npm run login     # una sola vez: pide dirección, usuario y contraseña en tu terminal
-npm run sync      # descarga tus cursos y tareas
+npm run sync      # descarga tus cursos, tareas y contenido
 npm start         # abre el panel en http://127.0.0.1:4173
-npm run status    # resumen rápido en la terminal, sin abrir el panel
-npm run pending   # solo lo que NO has entregado, por curso (usa --json para otros programas)
-npm run exclude -- "Nombre del curso"   # oculta un curso (por ejemplo, uno al que te inscribieron por error)
+npm run status    # o, si no quieres abrir el navegador, un resumen en la terminal
 ```
 
-También puedes sincronizar desde el botón del panel.
+## Uso completo
 
-## Leer todo el contenido de los cursos
+### Comandos básicos
+
+```bash
+npm run pending   # solo lo que NO has entregado, por curso (usa --json para otros programas)
+npm run exclude -- "Nombre del curso"   # oculta un curso (por ejemplo, uno al que te inscribieron por error)
+npm run exclude -- --remove "Nombre del curso"
+```
+
+También puedes sincronizar desde el botón del panel — el comando y el botón hacen exactamente lo mismo.
+
+### Leer todo el contenido de los cursos
 
 `npm run sync` no solo trae las tareas: lee el contenido completo de cada curso en progreso (secciones, actividades, foros, cuestionarios, material) y lo guarda en `data/content.json`.
 
@@ -48,7 +88,7 @@ npm run material                     # descarga los archivos de los cursos a dat
 npm run material -- Ética --max-mb 50
 ```
 
-## Entregar tareas (siempre con tu autorización)
+### Entregar tareas (siempre con tu autorización)
 
 La entrega tiene **dos pasos** y no hay atajo para saltarse el primero:
 
@@ -67,9 +107,19 @@ npm run submit -- --cancel     # descarta la vista previa
 - **Comprobaciones antes de tocar Moodle:** entregas abiertas o cerradas, fecha de cierre, entrega bloqueada, número, tamaño y tipo de archivos, si la tarea acepta archivos o texto, y qué archivos ya subidos se reemplazarían. Marca las entregas tardías.
 - **Declaración de autoría:** si Moodle la exige para el envío definitivo, hay que aceptarla de forma explícita con `--acepto-declaracion`.
 - Cada entrega queda anotada en `data/submissions.log`.
-- El panel web **no** puede entregar: es una acción que solo existe en la terminal.
+- El panel web **no** puede entregar: es una acción que solo existe en la terminal, a propósito.
 
-Quien use esto en nombre de otra persona (por ejemplo, un asistente) debe enseñar la vista previa a esa persona y ejecutar la confirmación solo después de un sí explícito.
+## Si sos un agente / le vas a pedir a uno que opere esto
+
+Este repo está pensado para que un asistente (Claude u otro) lo maneje directamente por vos, no solo para que lo lea. Las reglas completas están en **[AGENTS.md](AGENTS.md)**; el resumen que no te podés saltar:
+
+| Puede hacer sin preguntar | Necesita tu sí explícito cada vez |
+|---|---|
+| `login`, `sync`, `status`, `pending`, `content`, `material` — todo de solo lectura contra Moodle | Ejecutar `submit -- --confirm <código>` (el paso 2 de una entrega) |
+| Leer `data/` en tu máquina para responder preguntas sobre tus cursos | Exponer el servidor local fuera de `127.0.0.1` |
+| Enumerar `core_webservice_get_site_info` (metadata, ya lo hace `login`) | Invocar cualquier función de Moodle que la app no usa, "para ver qué hace" |
+
+Regla dura, sin excepciones: **un agente nunca corre el paso de confirmación de una entrega sin que vos hayas visto la vista previa y hayas dicho que sí.** Si te pidió "entrega esto", lo correcto es que te muestre el paso 1 tal cual sale en la terminal y espere tu respuesta antes de tocar `--confirm`.
 
 ## Privacidad y seguridad
 
@@ -79,20 +129,32 @@ Quien use esto en nombre de otra persona (por ejemplo, un asistente) debe enseñ
 - El servidor solo escucha en `127.0.0.1` y las acciones que modifican algo exigen una cabecera propia, para que otra página abierta en tu navegador no pueda disparar peticiones contra él.
 - El programa **lee** datos de Moodle. Solo escribe cuando entregas una tarea con el flujo de dos pasos de arriba: nunca borra nada.
 
-## Cómo funciona
+## Estructura del repo
 
-| Archivo | Función |
-|---|---|
-| `src/moodle.js` | Cliente de la API: pide el token y llama a las funciones de web services |
-| `src/sync.js` | Descarga cursos, tareas, estado de entrega y eventos del calendario |
-| `src/status.js` | Clasifica cada tarea por urgencia (hora de Bogotá) |
-| `src/store.js` | Guarda sesión, datos, marcas manuales y cursos excluidos en `data/` |
-| `src/content.js` | Lee el contenido de los cursos: foros, cuestionarios, actividades, material |
-| `src/submit.js` | Entrega en dos pasos: vista previa y confirmación con código |
-| `src/server.js` | Servidor local del panel y su API |
-| `public/index.html` | El panel |
+```
+moodle-tracker/
+├── src/
+│   ├── cli.js       # punto de entrada de todos los comandos (npm run <comando>)
+│   ├── moodle.js    # cliente de la API: pide el token y llama a las funciones de web services
+│   ├── sync.js       # descarga cursos, tareas, estado de entrega y eventos del calendario
+│   ├── content.js    # lee el contenido de los cursos: foros, cuestionarios, actividades, material
+│   ├── submit.js     # entrega en dos pasos: vista previa y confirmación con código
+│   ├── status.js     # clasifica cada tarea por urgencia (hora de Bogotá)
+│   ├── store.js      # guarda sesión, datos, marcas manuales y cursos excluidos en data/
+│   └── server.js     # servidor local del panel y su API
+├── public/
+│   └── index.html   # el panel: HTML + CSS + JS en un solo archivo, sin build
+├── test/            # pruebas contra un Moodle simulado, nunca contra el real
+├── data/            # tu sesión y tus datos (gitignored, nunca se sube)
+├── AGENTS.md        # reglas de operación para agentes/asistentes
+└── LICENSE
+```
 
 Funciones de Moodle que usa (las de escritura solo al entregar: `mod_assign_save_submission`, `mod_assign_submit_for_grading` y la subida de archivos a tu área de borradores): `core_webservice_get_site_info`, `core_course_get_enrolled_courses_by_timeline_classification` (cursos en progreso; con `core_enrol_get_users_courses` como respaldo), `mod_assign_get_assignments`, `mod_assign_get_submission_status` y `core_calendar_get_action_events_by_timesort`.
+
+## Usarlo con tu propio Moodle
+
+No hay nada de una universidad en particular escrito en el código: la dirección que ves en `npm run login` es solo un valor por defecto para no tenerla que escribir cada vez. Cualquiera con cuenta en un Moodle que tenga habilitado el servicio móvil puede usar este mismo programa apuntando a su propia institución — cada quien guarda su propio token en su copia local de `data/`, nadie comparte nada con nadie.
 
 ## Pruebas
 
@@ -111,13 +173,12 @@ Las pruebas usan un Moodle simulado. No se conectan a tu Moodle real.
 | `El token ya no sirve` | Ejecuta `npm run login` otra vez |
 | Avisos en el panel sobre una función | Tu Moodle no permite esa función; el resto sigue funcionando |
 
-## Usarlo con tu propio Moodle
-
-No hay nada de la UCP escrito en el código: la dirección que ves en `npm run login` es solo un valor por defecto para no tenerla que escribir cada vez. Cualquiera con cuenta en un Moodle que tenga habilitado el servicio móvil puede usar este mismo programa apuntando a su propia institución — cada quien guarda su propio token en su copia local de `data/`, nadie comparte nada con nadie.
-
 ## Contribuir
 
-Si quieres agregar algo (otro tipo de actividad, otro idioma, otra vista), revisa [AGENTS.md](AGENTS.md) antes de tocar cualquier cosa que hable con Moodle: ahí están las reglas de qué puede leer/escribir el programa (y por extensión, cualquier asistente que te ayude a programarlo) sin pedir permiso, y qué necesita tu autorización explícita cada vez.
+1. Antes de tocar cualquier cosa que hable con Moodle, lee [AGENTS.md](AGENTS.md) — humano o agente, las reglas son las mismas.
+2. Antes de agregar una dependencia, un build step o un framework, preguntate si de verdad hace falta. La respuesta casi siempre es que no: el proyecto entero vive sin ninguno de los tres.
+3. `npm test` tiene que seguir en verde. Si tu cambio toca `public/index.html`, ábrelo y probalo en el navegador — los tests no verifican que la interfaz se vea o se sienta bien, solo que el servidor responda lo que debe.
+4. PRs pequeños y de un solo tema. Un tipo de actividad nuevo, un idioma nuevo, una vista nueva: cada uno por separado.
 
 ## Licencia
 
