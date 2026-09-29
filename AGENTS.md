@@ -21,7 +21,7 @@ Este archivo formaliza las reglas de operación para un asistente/agente (humano
 
 ## 3. Servidor local (`src/server.js`)
 
-- Escucha solo en `127.0.0.1`. No se cambia a `0.0.0.0` ni se expone a la red sin que el usuario lo pida explícitamente y entienda que eso comparte su sesión de Moodle con cualquiera en esa red.
+- Escucha solo en `127.0.0.1`. No se cambia a `0.0.0.0` ni se expone a la red sin que el usuario lo pida explícitamente y entienda que eso comparte su sesión de Moodle con cualquiera en esa red. Esto aplica igual si corre en Docker: el `docker-compose.yml` publica el puerto como `127.0.0.1:4173:4173`, nunca como `4173:4173` (que en Docker sí escucha en `0.0.0.0` del host aunque el proceso adentro solo escuche en `127.0.0.1`).
 - Toda mutación (`POST`) exige el header `x-requested-with: moodle-tracker`. Si se agregan rutas nuevas que cambien estado, deben respetar ese mismo chequeo.
 - El panel web (`public/index.html`) nunca entrega tareas. Esa acción sigue existiendo solo por CLI, a propósito, para forzar que pase por el flujo de dos pasos en un terminal que el usuario está mirando.
 

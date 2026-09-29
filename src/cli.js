@@ -248,7 +248,11 @@ async function material() {
 
 async function serve() {
   const port = Number(process.env.PORT) || 4173;
-  createServer().listen(port, '127.0.0.1', () => {
+  // HOST solo existe para el caso Docker (ver Dockerfile): adentro de un contenedor, 127.0.0.1
+  // es el loopback DEL CONTENEDOR, no del host, así que el publish de puertos nunca llega.
+  // Fuera de Docker (npm start / npm run serve normal) esto siempre es 127.0.0.1.
+  const host = process.env.HOST || '127.0.0.1';
+  createServer().listen(port, host, () => {
     console.log(`Panel en ${C.bold}http://127.0.0.1:${port}${C.off}  (Ctrl+C para salir)`);
   });
 }

@@ -25,6 +25,7 @@ Usa la **API oficial de web services de Moodle** (la misma que usa la app móvil
 - [Requisitos](#requisitos)
 - [Inicio rápido](#inicio-rápido)
 - [Uso completo](#uso-completo)
+- [Docker (opcional)](#docker-opcional)
 - [Si sos un agente / le vas a pedir a uno que opere esto](#si-sos-un-agente--le-vas-a-pedir-a-uno-que-opere-esto)
 - [Privacidad y seguridad](#privacidad-y-seguridad)
 - [Estructura del repo](#estructura-del-repo)
@@ -109,6 +110,28 @@ npm run submit -- --cancel     # descarta la vista previa
 - Cada entrega queda anotada en `data/submissions.log`.
 - El panel web **no** puede entregar: es una acción que solo existe en la terminal, a propósito.
 
+## Docker (opcional)
+
+**No es el camino recomendado.** Node ya es más simple de instalar que Docker, y esta app no necesita nada que Docker resuelva (no hay dependencias que aislar, no hay "funciona en mi máquina"). Está acá para quien ya tiene Docker y lo prefiere así, o lo necesita para un ejercicio de dockerización.
+
+```bash
+docker compose build
+
+# Comandos de una sola vez (comparten el volumen ./data con el panel):
+docker compose run --rm tracker node src/cli.js login     # interactivo: pide usuario y contraseña
+docker compose run --rm tracker node src/cli.js sync
+docker compose run --rm tracker node src/cli.js status
+docker compose run --rm tracker node src/cli.js submit -- "Taller No. 1" --file /app/data/informe.pdf
+
+# El panel (queda en segundo plano):
+docker compose up -d          # http://127.0.0.1:4173
+docker compose down
+```
+
+- `data/` del host se monta dentro del contenedor: tu sesión y tus datos sobreviven a `docker compose down` y nunca quedan horneados dentro de la imagen (el `.dockerignore` los excluye a propósito — una imagen es tan distribuible como un commit).
+- Para `submit --file`, el archivo tiene que estar dentro de `./data` en tu máquina (ahí es donde el contenedor lo puede ver); referencialo como `/app/data/lo-que-sea`.
+- El `docker-compose.yml` publica el puerto como `127.0.0.1:4173:4173`, no como `4173:4173`. Es a propósito: `4173:4173` sale en `0.0.0.0` del host, cualquiera en tu red vería tu panel. No lo cambies sin querer eso.
+
 ## Si sos un agente / le vas a pedir a uno que opere esto
 
 Este repo está pensado para que un asistente (Claude u otro) lo maneje directamente por vos, no solo para que lo lea. Las reglas completas están en **[AGENTS.md](AGENTS.md)**; el resumen que no te podés saltar:
@@ -146,6 +169,7 @@ moodle-tracker/
 │   └── index.html   # el panel: HTML + CSS + JS en un solo archivo, sin build
 ├── test/            # pruebas contra un Moodle simulado, nunca contra el real
 ├── data/            # tu sesión y tus datos (gitignored, nunca se sube)
+├── Dockerfile / docker-compose.yml   # opcional, ver "Docker" arriba
 ├── AGENTS.md        # reglas de operación para agentes/asistentes
 └── LICENSE
 ```

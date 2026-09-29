@@ -1,0 +1,11 @@
+services:
+  tracker:
+    build: .
+    # Atado a 127.0.0.1 a propósito: la app promete que el panel no sale de tu máquina
+    # (ver AGENTS.md, sección "Servidor local"). No cambies esto a "4173:4173" sin más.
+    ports:
+      - "127.0.0.1:4173:4173"
+    volumes:
+      - ./data:/app/data
+    stdin_open: true # necesario para `docker compose run` en comandos interactivos (login)
+    tty: true
